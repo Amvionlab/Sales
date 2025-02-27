@@ -39,7 +39,9 @@ const Form = () => {
   const [submissionStatus, setSubmissionStatus] = useState(null);
   const [attachmentError, setAttachmentError] = useState("");
  
- 
+  const [suggestions, setSuggestions] = useState([]);
+  const [query, setQuery] = useState("");
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -69,9 +71,12 @@ const Form = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    setQuery(value);
 
-    if (name === 'customer_name') {
-      const selectedCustomer = customers.find(customer => customer.id === value);
+    if (name === "customer_name") {
+      const selectedCustomer = customers.find(
+        (customer) => customer.name.toLowerCase() === value.toLowerCase()
+      );
 
       setFormData({
         ...formData,
@@ -82,16 +87,50 @@ const Form = () => {
         contact_number: selectedCustomer ? selectedCustomer.mobile : "",
         contact_mail: selectedCustomer ? selectedCustomer.email : "",
       });
-    } 
-    
-    else {
+
+      if (value.length > 0) {
+        const filtered = customers.filter((customer) =>
+          customer.name.toLowerCase().includes(value.toLowerCase())
+        );
+        setSuggestions(filtered);
+      } else {
+        setSuggestions([]);
+      }
+    } else {
       setFormData({
         ...formData,
-        [name]: value
+        [name]: value,
       });
     }
   };
 
+  const handleSelect = (customer) => {
+    setQuery(customer.name);
+    setFormData({
+      ...formData,
+      customer_name: customer.name,
+      customer_location: customer.location,
+      customer_department: customer.department,
+      contact_person: customer.contact_person,
+      contact_number: customer.mobile,
+      contact_mail: customer.email,
+    });
+    setSuggestions([]);
+  };
+
+
+  const highlightMatch = (text, query) => {
+    const regex = new RegExp(`(${query})`, "gi");
+    return text.split(regex).map((part, index) =>
+      part.toLowerCase() === query.toLowerCase() ? (
+        <strong key={index} className="text-red-500">
+          {part}
+        </strong>
+      ) : (
+        part
+      )
+    );
+  };
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -162,21 +201,37 @@ const Form = () => {
             <div className="font-mont font-semibold text-2xl mb-3">
               Ticket Detail:
             </div>
-            <div className="flex items-center mb-3 mr-4">
-              <label className="text-sm font-semibold text-prime mr-2 w-32">
-                Group <span className="text-red-600 text-md font-bold">*</span>
-              </label>
-              <input
-                type="text"
-                name="customer_name"
-                placeholder="Enter Name"
-                value={formData.customer_name}
-                onChange={handleChange}
-                required
-                className="flex-grow text-xs bg-box border p-1.5 px-2 rounded outline-none transition ease-in-out delay-150 focus:border focus:border-flo max-w-72"
-              />
-             
-            </div>
+            <div className="relative">
+      <div className="flex items-center mb-3 mr-4">
+        <label className="text-sm font-semibold text-prime mr-2 w-32 ">
+          Group <span className="text-red-600 text-md font-bold">*</span>
+        </label>
+        <input
+  type="text"
+  name="customer_name"
+  placeholder="Enter Name"
+  value={formData.customer_name} // Change from query to formData.customer_name
+  onChange={handleChange}
+  required
+  className="flex-grow text-xs bg-box border p-1.5 px-2 rounded outline-none transition ease-in-out delay-150 focus:border focus:border-flo max-w-72"
+/>
+
+      </div>
+
+      {suggestions.length > 0 && (
+        <ul className="absolute z-10 bg-white border rounded-md shadow-md w-72 ml-32 overflow-y-auto max-h-40">
+          {suggestions.map((customer) => (
+            <li
+              key={customer.id}
+              onClick={() => handleSelect(customer)}
+              className="p-2 cursor-pointer hover:bg-gray-200"
+            >
+              {highlightMatch(customer.name, query)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
             <div className="flex items-center mb-3 mr-4">
               <label className="text-sm font-semibold text-prime mr-2 w-32">
                 Type of Ticket <span className="text-red-600 text-md font-bold">*</span>
