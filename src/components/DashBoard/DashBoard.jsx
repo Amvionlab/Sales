@@ -29,6 +29,11 @@ const App = () => {
   const [activeTypeId, setActiveTypeId] = useState(null);
   const [selectedDate, setSelectedDate] = useState("");
   const scrollContainerRef = useRef();
+  const [selectedBranch, setSelectedBranch] = useState(""); // Store selected branch
+  const [search, setSearch] = useState(""); // Search input state
+  const [showDropdown, setShowDropdown] = useState(false); // Control dropdown visibility
+
+  const uniqueBranches = [...new Set(tickets.map((ticket) => ticket.ticket_customer_value))];
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -217,6 +222,11 @@ const App = () => {
     });
   };
 
+  const filteredBranches =
+  search.trim() === "" ? uniqueBranches : uniqueBranches.filter((branch) =>
+    branch.toLowerCase().includes(search.toLowerCase())
+  );
+
   return (
     <div className="bg-box h-full">
       <div className="flex justify-between items-center">
@@ -225,6 +235,52 @@ const App = () => {
             Welcome {user.firstname}!
           </h1>
         </div>
+        <div className="ml-10">
+        
+        <input
+          type="text"
+          id="branchFilter"
+          className="border-2 border-flo rounded p-1 w-40 text-xs mt-1"
+          placeholder="Search branch..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onFocus={() => setShowDropdown(true)}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 200)} // Delay to allow click
+        />
+
+        {showDropdown && (
+          <ul className="absolute left-80 w-80 bg-white border rounded-md shadow-lg max-h-80 text-xs text-prime font-semibold overflow-y-auto mt-1 z-10">
+            <li
+              className="p-2 hover:bg-gray-100 cursor-pointer"
+              onMouseDown={() => {
+                setSelectedBranch("");
+                setSearch("");
+              }}
+            >
+              All Branches
+            </li>
+            {filteredBranches.map((branch, index) => (
+              <li
+                key={index}
+                className="p-2 hover:bg-gray-100 cursor-pointer"
+                onMouseDown={() => {
+                  setSelectedBranch(branch);
+                  setSearch(branch);
+                }}
+              >
+                {/* Bold matching letters */}
+                {branch.split("").map((char, i) => (
+                  <span key={i} className={search.toLowerCase().includes(char.toLowerCase()) ? "font-bold text-blue-600" : ""}>
+                    {char}
+                  </span>
+                ))}
+              </li>
+            ))}
+          </ul>
+        )}
+        </div>
+
+
         <div className="m-2 flex-row-reverse header-right items-center">
           <div className="ml-4">
             {ticketTypes.map((type) => (
@@ -265,6 +321,7 @@ const App = () => {
                 <div className="column-content mb-2">
                   {tickets
                     .filter((ticket) => ticket.status === column.id)
+                    .filter((ticket) => (selectedBranch ? ticket.ticket_customer_value === selectedBranch : true)) // Apply filter
                     .map((ticket) => (
                       <div
                         key={ticket.id}
