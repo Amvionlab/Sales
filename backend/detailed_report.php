@@ -1,19 +1,33 @@
-<?php 
-include 'config.php'; 
+<?php
+include 'config.php';
+
+// Function to split assignees and create separate rows
+function splitAssignees($ticket) {
+    $assignees = explode(' & ', $ticket['assignees']);
+    $result = [];
+
+    foreach ($assignees as $assignee) {
+        $newTicket = $ticket;
+        $newTicket['assignees'] = trim($assignee);
+        $result[] = $newTicket;
+    }
+
+    return $result;
+}
 
 // Check if export parameter is set in the URL
 if (isset($_GET['export']) && $_GET['export'] == 'true') {
     // Set headers for CSV download
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="ticket_report.csv"');
-    
+
     // Open PHP output stream for writing the CSV
     $output = fopen('php://output', 'w');
 
     // Add the CSV header row
     $headers = [
-        'Ticket ID', 'Type', 'Status', 'Nature of Call', 'Service', 'Domain', 
-        'Customer', 'Location', 'SLA', 'Created By', 'Department', 'Subdomain', 
+        'Ticket ID', 'Type', 'Status', 'Nature of Call', 'Service', 'Domain',
+        'Customer', 'Location', 'SLA', 'Created By', 'Department', 'Subdomain',
         'Assignees', 'Closed Date', 'Logs', 'Timesheet'
     ];
     fputcsv($output, $headers);
@@ -29,7 +43,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
         // Use FIND_IN_SET to check if $id is in the assignees list
         $cond = "(FIND_IN_SET($id, ticket.assignees) OR ticket.created_by = $id)";
     }
-    
+
     $sqlTickets = "SELECT 
                 ticket.*,
                 ticket_type.type AS type,
@@ -100,65 +114,70 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
     $result = $conn->query($sqlTickets);
 
     if ($result->num_rows > 0) {
-        while($row = $result->fetch_assoc()) {
-            // For each ticket, fetch logs and timesheet data
-            $ticketId = $row['id'];
-            
-            // Fetch logs for the ticket
-            $sqlLogs = "SELECT log.*, 
-                        CONCAT(user.firstname, ' ', user.lastname) AS name,
-                        from_status.status AS statusfrom,
-                        to_status.status AS statusto
-                    FROM log
-                    LEFT JOIN user ON log.done_by = user.id
-                    LEFT JOIN ticket_status AS from_status ON log.from_status = from_status.id
-                    LEFT JOIN ticket_status AS to_status ON log.to_status = to_status.id
-                    WHERE log.tid = $ticketId";
-            $resultLogs = $conn->query($sqlLogs);
-            $logs = [];
-            if ($resultLogs->num_rows > 0) {
-                while ($logRow = $resultLogs->fetch_assoc()) {
-                    $logs[] = $logRow;
+        while ($row = $result->fetch_assoc()) {
+            // Split assignees into separate rows
+            $tickets = splitAssignees($row);
+
+            foreach ($tickets as $ticket) {
+                // For each ticket, fetch logs and timesheet data
+                $ticketId = $ticket['id'];
+
+                // Fetch logs for the ticket
+                $sqlLogs = "SELECT log.*, 
+                            CONCAT(user.firstname, ' ', user.lastname) AS name,
+                            from_status.status AS statusfrom,
+                            to_status.status AS statusto
+                        FROM log
+                        LEFT JOIN user ON log.done_by = user.id
+                        LEFT JOIN ticket_status AS from_status ON log.from_status = from_status.id
+                        LEFT JOIN ticket_status AS to_status ON log.to_status = to_status.id
+                        WHERE log.tid = $ticketId";
+                $resultLogs = $conn->query($sqlLogs);
+                $logs = [];
+                if ($resultLogs->num_rows > 0) {
+                    while ($logRow = $resultLogs->fetch_assoc()) {
+                        $logs[] = $logRow;
+                    }
                 }
-            }
 
-            // Fetch timesheet entries for the ticket
-            $sqlTimesheet = "SELECT timesheet.*, 
-                            CONCAT(user.firstname, ' ', user.lastname) AS name
-                        FROM timesheet
-                        LEFT JOIN user ON timesheet.done_by = user.id
-                        WHERE timesheet.tid = $ticketId AND timesheet.is_active = 1";
-            $resultTimesheet = $conn->query($sqlTimesheet);
-            $timesheet = [];
-            if ($resultTimesheet->num_rows > 0) {
-                while ($timesheetRow = $resultTimesheet->fetch_assoc()) {
-                    $timesheet[] = $timesheetRow;
+                // Fetch timesheet entries for the ticket
+                $sqlTimesheet = "SELECT timesheet.*, 
+                                CONCAT(user.firstname, ' ', user.lastname) AS name
+                            FROM timesheet
+                            LEFT JOIN user ON timesheet.done_by = user.id
+                            WHERE timesheet.tid = $ticketId AND timesheet.is_active = 1";
+                $resultTimesheet = $conn->query($sqlTimesheet);
+                $timesheet = [];
+                if ($resultTimesheet->num_rows > 0) {
+                    while ($timesheetRow = $resultTimesheet->fetch_assoc()) {
+                        $timesheet[] = $timesheetRow;
+                    }
                 }
+
+                // Format logs and timesheet as string for CSV
+                $logsStr = '';
+                foreach ($logs as $log) {
+                    $logsStr .= $log['date'] . ' (' . $log['name'] . ') - ' . $log['statusto'] . "; ";
+                }
+
+                $timesheetStr = '';
+                foreach ($timesheet as $ts) {
+                    $timesheetStr .= $ts['date'] . ' (' . $ts['name'] . ') - ' . $ts['totalhours'] . " hours; ";
+                }
+
+                // Add ticket data along with logs and timesheet to CSV
+                $csvRow = [
+                    $ticket['id'], $ticket['type'], $ticket['status'], $ticket['nature_of_call'], $ticket['service'], $ticket['domain'],
+                    $ticket['customer'], $ticket['location'], $ticket['sla'], $ticket['name'], $ticket['department'], $ticket['subdomain'],
+                    $ticket['assignees'], $ticket['closed_date'], $logsStr, $timesheetStr
+                ];
+
+                // Write ticket data to the CSV
+                fputcsv($output, $csvRow);
             }
-
-            // Format logs and timesheet as string for CSV
-            $logsStr = '';
-            foreach ($logs as $log) {
-                $logsStr .= $log['date'] . ' (' . $log['name'] . ') - ' . $log['statusto'] . "; ";
-            }
-
-            $timesheetStr = '';
-            foreach ($timesheet as $ts) {
-                $timesheetStr .= $ts['date'] . ' (' . $ts['name'] . ') - ' . $ts['totalhours'] . " hours; ";
-            }
-
-            // Add ticket data along with logs and timesheet to CSV
-            $csvRow = [
-                $row['id'], $row['type'], $row['status'], $row['nature_of_call'], $row['service'], $row['domain'],
-                $row['customer'], $row['location'], $row['sla'], $row['name'], $row['department'], $row['subdomain'],
-                $row['assignees'], $row['closed_date'], $logsStr, $timesheetStr
-            ];
-
-            // Write ticket data to the CSV
-            fputcsv($output, $csvRow);
         }
     }
-    
+
     // Close the output stream
     fclose($output);
     exit; // End the script to prevent further output
@@ -174,7 +193,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
         // Use FIND_IN_SET to check if $id is in the assignees list
         $cond = "(FIND_IN_SET($id, ticket.assignees) OR ticket.created_by = $id)";
     }
-    
+
     $sqlTickets = "SELECT 
                 ticket.*,
                 ticket_type.type AS type,
@@ -246,8 +265,9 @@ if (isset($_GET['export']) && $_GET['export'] == 'true') {
 
     if ($result->num_rows > 0) {
         $tickets = [];
-        while($row = $result->fetch_assoc()) {
-            $tickets[] = $row;
+        while ($row = $result->fetch_assoc()) {
+            // Split assignees into separate rows
+            $tickets = array_merge($tickets, splitAssignees($row));
         }
         echo json_encode($tickets);
     } else {
