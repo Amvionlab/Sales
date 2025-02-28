@@ -34,20 +34,39 @@ function Reports() {
   const [toDate, setToDate] = useState("");
   const [dateFilterType, setDateFilterType] = useState("post_date"); // Default to Post Date
 
-  
+  useEffect(() => {
+    const today = new Date();
+    
+    // Ensure first day of the current month
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    // Format as YYYY-MM-DD
+    const formatDate = (date) => {
+      return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+        .toISOString()
+        .split("T")[0];
+    };
+
+    setFromDate(formatDate(firstDayOfMonth));
+    setToDate(formatDate(today));
+  }, []);
 
   const headers = [
-    "Id",
-    "Type",
-    "Status",
-    "Customer",
-    "Assignees",
-    "Domain",
-    "RaisedBy",
-    "Post Date",
-    "Scheduled Date",
-    "Closed Date",
+    { label: "Id", value: "id" },
+    { label: "Type", value: "type" },
+    { label: "SLA", value: "sla" },
+    { label: "Status", value: "status" },
+    { label: "Department", value: "department" },
+    { label: "Assignees", value: "assignees" },
+    { label: "Domain", value: "domain" },
+    { label: "Sub Domain", value: "subdomain" },
+    { label: "Customer", value: "customer" },
+    { label: "RaisedBy", value: "raisedby" },
+    { label: "Created At", value: "post_date" },
+    { label: "Scheduled Date", value: "scheduled_date" },
+    { label: "Closed At", value: "closed_date" },
   ];
+  
 
   useEffect(() => {
     const fetchTickets = async () => {
@@ -227,11 +246,12 @@ function Reports() {
   const csvData = sortedTickets.map((ticket) => {
     const rowData = {};
     headers.forEach((header) => {
-      const key = header.toLowerCase().replace(" ", "_"); // Convert header to match ticket keys
-      rowData[header] = ticket[key] ? (typeof ticket[key] === 'string' ? ticket[key] : ticket[key].toString()) : 'N/A'; // Use 'N/A' for missing data
+      const key = header.value; // Correct way to access ticket keys
+      rowData[header.label] = ticket[key] ? (typeof ticket[key] === 'string' ? ticket[key] : ticket[key].toString()) : 'N/A'; // Use 'N/A' for missing data
     });
     return rowData;
   });
+  
   return (
     <div className="bg-second h-full overflow-hidden">
       <div className="m-1 p-2 bg-box w-full flex justify-center items-center">
@@ -301,31 +321,28 @@ function Reports() {
           </FormControl>
 
           <div
-            className="border-black border rounded-md p-1"
-            onClick={() => document.getElementById("fromDate").showPicker()} // Show the date picker on click
-          >
-            <p>From</p>
-            <input
-              type="date"
-              id="fromDate"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="outline-none border-none" // Ensure no default borders when focused
-            />
-          </div>
+        className="border-black border rounded-md p-1"
+        onClick={() => document.getElementById("fromDate").showPicker()}
+      >
+        <p>From</p>
+        <input
+          type="date"
+          id="fromDate"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          className="outline-none border-none"
+        />
+      </div>
 
-          <div className="border-black border rounded-md p-1">
-            <p onClick={() => document.getElementById("toDate").showPicker()}>
-              To
-            </p>
-            <input
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              name=""
-              id="toDate"
-            />
-          </div>
+      <div className="border-black border rounded-md p-1">
+        <p onClick={() => document.getElementById("toDate").showPicker()}>To</p>
+        <input
+          type="date"
+          id="toDate"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+        />
+      </div>
           <div
             className="font-semibold py-1 px-3 rounded border border-[red] text-red-600 hover:bg-red-600 hover:text-white cursor-pointer transition-all duration-150"
             onClick={() => {
@@ -413,129 +430,117 @@ function Reports() {
                 onRowsPerPageChange={handleRowsPerPageChange}
                 rowsPerPageOptions={[10, 25, 50, 100, 500]}
               />
+             
               <div className="flex gap-1">
-              <CSVLink
-  data={csvData}
-  headers={headers}
-  filename={"tickets.csv"}
-  className="bg-box transform hover:scale-110 transition-transform duration-200 ease-in-out border-2 text-prime text-xs font-semibold py-1 px-3 rounded m-2"
+
+{user.accessId === '3' && (
+<button
+className="bg-box border transform hover:scale-110 transition-transform duration-200 ease-in-out text-prime text-xs font-semibold py-1 px-3 rounded m-2"
+onClick={() => window.open(`${baseURL}backend/sales.php`, '_blank')}
 >
-  CSV
-</CSVLink>
+Assign Tickets
+</button>
+)}
+{user.accessId === '3' && (
+<button
+className="bg-box border transform hover:scale-110 transition-transform duration-200 ease-in-out text-prime text-xs font-semibold py-1 px-3 rounded m-2"
+onClick={() => window.location.href = `${baseURL}backend/detailed_report.php?export=true`}
+>
+Detailed Report
+</button>
+)}
               </div>
             </div>
             <TableContainer sx={{ maxHeight: "calc(100vh - 200px)" }}>
-              <Table stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    {headers.map((header, index) => (
-                      <TableCell
-                        key={index}
-                        align="left"
-                        sx={{
-                          whiteSpace: "nowrap",
-                          fontWeight: "300",
-                          fontSize: "14px",
-                          padding: "1px 3px",
-                          backgroundColor: "#004080",
-                          color: "white",
-                        }}
-                      >
-                        <TableSortLabel
-                          active={
-                            orderBy === header.toLowerCase().replace(" ", "_")
-                          }
-                          direction={
-                            orderBy === header.toLowerCase().replace(" ", "_")
-                              ? order
-                              : "asc"
-                          }
-                          onClick={() =>
-                            handleRequestSort(
-                              header.toLowerCase().replace(" ", "_")
-                            )
-                          }
-                          sx={{
-                            "&.Mui-active": { color: "white" },
-                            "&:hover": { color: "white" },
-                            "& .MuiTableSortLabel-icon": {
-                              color: "white !important",
-                            },
-                          }}
-                        >
-                          {header}
-                        </TableSortLabel>
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody className="py-10">
-                  {sortedTickets.length === 0 ? (
-                    <TableRow hover>
-                      <TableCell
-                        colSpan={headers.length} // Adjusted to span all columns
-                        sx={{
-                          padding: "1px 3px",
-                          fontSize: "10px",
-                          textAlign: "center",
-                        }}
-                      >
-                        No tickets available
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    sortedTickets
-                      .slice(
-                        page * ticketsPerPage,
-                        page * ticketsPerPage + ticketsPerPage
-                      )
-                      .map((ticket) => (
-                        <TableRow key={ticket.id} hover>
-                          {headers.map((header, idx) => (
-                            <TableCell
-                              key={idx}
-                              align="left"
-                              sx={{
-                                padding: "1px 3px",
-                                fontSize: "11px",
-                                whiteSpace: "nowrap",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                cursor: "pointer",
-                                "&:hover": {
-                                  whiteSpace: "normal",
-                                  backgroundColor: "#f5f5f5",
-                                },
-                              }}
-                              title={
-                                ticket[header.toLowerCase().replace(" ", "_")] ||
-                                (header === "Assignees" && "N/A")
-                              }
-                            >
-                              {header === "Assignees"
-                                ? (ticket.assignees
-                                    ?.split(" ")
-                                    .slice(0, 3)
-                                    .join(" ") || "N/A") +
-                                  (ticket.assignees?.split(" ").length > 3
-                                    ? "..."
-                                    : "")
-                                : header === "Customer" // Check for "Customer"
-                                ? (ticket.customer ?.split(" ")
-                                .slice(0, 3)
-                                .join(" ") || "N/A") +
-                              (ticket.customer?.split(" ").length > 3
-                                ? "..."
-                                : "")
-                            : ticket[header.toLowerCase().replace(" ", "_")]}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+  <Table stickyHeader>
+    <TableHead>
+      <TableRow>
+        {headers.map((header, index) => (
+          <TableCell
+            key={index}
+            align="left"
+            sx={{
+              whiteSpace: "nowrap",
+              fontWeight: "300",
+              fontSize: "14px",
+              padding: "1px 3px",
+              backgroundColor: "#004080",
+              color: "white",
+            }}
+          >
+            <TableSortLabel
+              active={orderBy === header.value}
+              direction={orderBy === header.value ? order : "asc"}
+              onClick={() => handleRequestSort(header.value)}
+              sx={{
+                "&.Mui-active": { color: "white" },
+                "&:hover": { color: "white" },
+                "& .MuiTableSortLabel-icon": {
+                  color: "white !important",
+                },
+              }}
+            >
+              {header.label}
+            </TableSortLabel>
+          </TableCell>
+        ))}
+      </TableRow>
+    </TableHead>
+
+    <TableBody className="py-10">
+      {sortedTickets.length === 0 ? (
+        <TableRow hover>
+          <TableCell
+            colSpan={headers.length}
+            sx={{
+              padding: "1px 3px",
+              fontSize: "10px",
+              textAlign: "center",
+            }}
+          >
+            No tickets available
+          </TableCell>
+        </TableRow>
+      ) : (
+        sortedTickets
+          .slice(page * ticketsPerPage, page * ticketsPerPage + ticketsPerPage)
+          .map((ticket) => (
+            <TableRow key={ticket.id} hover>
+              {headers.map((header, idx) => (
+                <TableCell
+                  key={idx}
+                  align="left"
+                  sx={{
+                    padding: "1px 3px",
+                    fontSize: "11px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    cursor: "pointer",
+                    "&:hover": {
+                      whiteSpace: "normal",
+                      backgroundColor: "#f5f5f5",
+                    },
+                  }}
+                  title={ticket[header.value] || (header.label === "Assignees" ? "N/A" : "")}
+                >
+                  {header.label === "Assignees"
+                    ? (ticket.assignees?.split(" ").slice(0, 3).join(" ") || "N/A") +
+                      (ticket.assignees?.split(" ").length > 3 ? "..." : "")
+                    : header.label === "Customer"
+                    ? (ticket.customer?.split(" ").slice(0, 3).join(" ") || "N/A") +
+                      (ticket.customer?.split(" ").length > 3 ? "..." : "")
+                    : ticket[header.value] || "N/A"}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))
+      )}
+    </TableBody>
+  </Table>
+</TableContainer>
+
+
       </Paper>
     </div>
   </div>
